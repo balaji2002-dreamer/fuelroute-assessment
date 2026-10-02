@@ -1,0 +1,4 @@
+Django==6.1.1
+requests>=2.32,<3
+geonamescache==3.0.2
+

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FuelRoute — plan a cheaper drive</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.11.2/dist/maplibre-gl.css">
+  <style>
+    :root{font-family:Inter,ui-sans-serif,system-ui,Segoe UI,sans-serif;color:#17251e;background:#f4f6f2}*{box-sizing:border-box}body{margin:0}.shell{max-width:1120px;margin:auto;padding:34px 24px}.eyebrow{color:#41735b;font-weight:750;letter-spacing:.12em;font-size:12px;text-transform:uppercase}.hero{display:flex;justify-content:space-between;align-items:end;gap:24px;margin:10px 0 24px}h1{font-size:clamp(30px,4vw,46px);line-height:1.05;margin:8px 0}.sub{color:#627269;margin:8px 0 0}.badge{border:1px solid #dce6dc;border-radius:999px;padding:9px 13px;background:white;color:#40634e;font-size:13px;white-space:nowrap}.panel{background:white;border:1px solid #e3e9e2;border-radius:20px;padding:20px;box-shadow:0 8px 28px #25352a0a}.form{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end}label{font-size:12px;font-weight:700;color:#59675e;display:block;margin:0 0 7px}.form input{width:100%;padding:13px 14px;border:1px solid #dbe3da;border-radius:11px;font:inherit}.form input:focus{outline:2px solid #a7d3b6;border-color:#68a27a}button{border:0;border-radius:11px;padding:14px 19px;background:#1f6842;color:#fff;font:inherit;font-weight:750;cursor:pointer}button:disabled{opacity:.6;cursor:wait}.hint{font-size:12px;color:#7c8980;margin:12px 0 0}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:15px 0}.stat{background:#fff;border:1px solid #e3e9e2;border-radius:15px;padding:15px}.stat small{display:block;color:#7c8980;margin-bottom:5px}.stat strong{font-size:22px}.content{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(270px,1fr);gap:15px}#map{height:470px;border-radius:15px;background:#edf1eb}.stops{padding:0;margin:6px 0 0;list-style:none;max-height:430px;overflow:auto}.stops li{padding:13px 0;border-bottom:1px solid #edf0ec}.stops li:last-child{border:0}.stop-title{font-weight:750}.stop-meta{color:#68776d;font-size:13px;margin-top:4px}.price{color:#1f6842;font-weight:750;float:right}.status{margin:12px 2px;color:#526358;min-height:20px}.hidden{display:none}.foot{font-size:11px;color:#7c8980;margin:16px 2px}@media(max-width:760px){.hero{align-items:start;flex-direction:column}.form{grid-template-columns:1fr}.content{grid-template-columns:1fr}#map{height:360px}.stats{grid-template-columns:1fr}.badge{white-space:normal}}
+    #map .maplibregl-ctrl button{padding:0;border-radius:0;background:transparent;color:#17251e}
+  </style>
+</head>
+<body><main class="shell">
+  <div class="eyebrow">Trip fuel planner</div>
+  <div class="hero"><div><h1>Drive farther.<br>Spend less at the pump.</h1><p class="sub">A route planned around fuel prices along the way.</p></div><div class="badge">US routes · 500 mile range · 10 MPG</div></div>
+  <section class="panel"><form id="route-form" class="form"><div><label for="start">START</label><input id="start" name="start" value="Boston, MA" required placeholder="City, State"></div><div><label for="finish">DESTINATION</label><input id="finish" name="finish" value="New York, NY" required placeholder="City, State"></div><button id="submit">Find my route</button></form><p class="hint">Enter a US city or address and include the state abbreviation.</p></section>
+  <p id="status" class="status" role="status"></p>
+  <section id="results" class="hidden"><div class="stats"><div class="stat"><small>ROUTE DISTANCE</small><strong id="distance">—</strong></div><div class="stat"><small>ESTIMATED FUEL COST</small><strong id="cost">—</strong></div><div class="stat"><small>PLANNED FUEL STOPS</small><strong id="count">—</strong></div></div>
+    <div class="content"><div class="panel"><div id="map"></div><p class="foot">Map © OpenStreetMap contributors · Route by OSRM. Fuel prices are supplied by the assignment dataset.</p></div><aside class="panel"><div class="eyebrow">Your fuel plan</div><ul id="stops" class="stops"></ul></aside></div></section>
+</main>
+<script type="module">
+import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.11.2/dist/maplibre-gl.mjs';
+
+const form=document.querySelector('#route-form'),statusEl=document.querySelector('#status'),results=document.querySelector('#results'),button=document.querySelector('#submit');
+let map,markers=[];
+
+function drawRoute(data){
+  for(const marker of markers)marker.remove();
+  markers=[];
+  const source=map.getSource('route');
+  if(source){source.setData(data.route)}else{
+    map.addSource('route',{type:'geojson',data:data.route});
+    map.addLayer({id:'route-line',type:'line',source:'route',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#218052','line-width':5,'line-opacity':0.9}});
+  }
+  function addMarker(coordinates,color,label){
+    const marker=new maplibregl.Marker({color}).setLngLat(coordinates).setPopup(new maplibregl.Popup({offset:24}).setText(label)).addTo(map);
+    markers.push(marker);
+  }
+  for(const stop of data.fuel_stops)addMarker([stop.longitude,stop.latitude],'#e49b22',stop.location+' · $'+stop.price_per_gallon.toFixed(3)+'/gal');
+  addMarker([data.start.coordinates.longitude,data.start.coordinates.latitude],'#287a52','Start: '+data.start.resolved);
+  addMarker([data.finish.coordinates.longitude,data.finish.coordinates.latitude],'#bd4b4b','Finish: '+data.finish.resolved);
+  const bounds=new maplibregl.LngLatBounds();
+  for(const coordinate of data.route.coordinates)bounds.extend(coordinate);
+  map.fitBounds(bounds,{padding:36,maxZoom:12});
+}
+
+function showMap(data){
+  if(!map){
+    map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/liberty',center:[data.start.coordinates.longitude,data.start.coordinates.latitude],zoom:5});
+    map.addControl(new maplibregl.NavigationControl(),'top-right');
+    map.once('load',()=>drawRoute(data));
+  }else if(map.isStyleLoaded())drawRoute(data);
+  else map.once('load',()=>drawRoute(data));
+}
+
+form.addEventListener('submit',async e=>{
+  e.preventDefault();button.disabled=true;statusEl.textContent='Finding the best price stops along your route…';results.classList.add('hidden');
+  try{
+    const query=new URLSearchParams(new FormData(form));
+    const response=await fetch('/api/route/?'+query);
+    const data=await response.json();
+    if(!response.ok)throw new Error(data.error||'Could not plan this route.');
+    document.querySelector('#distance').textContent=data.distance_miles.toLocaleString()+' mi';
+    document.querySelector('#cost').textContent='$'+data.fuel_cost_usd.toFixed(2);
+    document.querySelector('#count').textContent=data.fuel_stops.length;
+    const list=document.querySelector('#stops');list.replaceChildren();
+    for(const stop of data.fuel_stops){
+      const item=document.createElement('li'),price=document.createElement('span'),title=document.createElement('div'),meta=document.createElement('div');
+      price.className='price';price.textContent='$'+stop.price_per_gallon.toFixed(3)+'/gal';
+      title.className='stop-title';title.textContent=stop.location;
+      meta.className='stop-meta';meta.textContent=stop.name+' · mile '+stop.route_mile+' · '+stop.miles_off_route+' mi from route · '+stop.gallons+' gal · estimated $'+stop.estimated_cost_usd.toFixed(2);
+      item.append(price,title,meta);list.append(item);
+    }
+    results.classList.remove('hidden');showMap(data);
+    statusEl.textContent='Route ready. Estimated fuel cost assumes refuelling at the selected dataset prices.';
+  }catch(error){statusEl.textContent=error.message}
+  finally{button.disabled=false}
+});
+</script></body></html>

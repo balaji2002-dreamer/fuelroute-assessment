@@ -1,0 +1,38 @@
+{
+  "info": {
+    "name": "FuelRoute API",
+    "description": "Demo requests for the local FuelRoute Django API.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8000" }
+  ],
+  "item": [
+    {
+      "name": "Plan Boston to New York",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/route/?start=Boston%2C%20MA&finish=New%20York%2C%20NY",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "route"],
+          "query": [
+            { "key": "start", "value": "Boston, MA" },
+            { "key": "finish", "value": "New York, NY" }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Validation error — missing locations",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/route/"
+      },
+      "response": []
+    }
+  ]
+}
